@@ -23,17 +23,7 @@
         .btn-hover-effect {
             @apply transition duration-300 ease-in-out transform hover:-translate-y-1;
         }
-        /* 用于导出卡片的样式，在页面上不可见 */
-        #export-container {
-            position: absolute;
-            left: -9999px;
-            top: -9999px;
-            width: 750px; /* 增加宽度以容纳新列 */
-            background-color: white;
-            padding: 20px;
-            font-family: 'Inter', sans-serif;
-            border: 1px solid #e5e7eb;
-        }
+        
         /* 自定义美化toggle开关 */
         .toggle-checkbox:checked {
             @apply bg-green-500;
@@ -148,13 +138,28 @@
                     <canvas id="yield-chart"></canvas>
                 </div>
                 <div id="institution-chart-container" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                    <h2 class="text-xl font-semibold mb-4 text-gray-700">机构持仓分析</h2>
-                    <div class="relative mx-auto" style="max-width: 650px; max-height: 650px;">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold text-gray-700">机构持仓分析</h2>
+                        <button id="export-institution-chart-btn" class="flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-purple-700 btn-hover-effect">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                            导出图表
+                        </button>
+                    </div>
+                    <div class="relative mx-auto" style="max-width: 750px; max-height: 750px;">
                         <canvas id="institution-chart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Container for generating the export image. It's hidden off-screen. -->
+    <div id="export-container" style="position: absolute; left: -9999px; top: -9999px; width: 800px; background-color: white; padding: 20px; font-family: 'Inter', sans-serif; border: 1px solid #e5e7eb;">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h2 id="export-title" style="font-size: 24px; font-weight: bold; color: #1f2937;"></h2>
+            <p id="export-date" style="font-size: 14px; color: #6b7280; margin-top: 5px;"></p>
+        </div>
+        <div id="export-content"></div>
     </div>
     
     <script>
@@ -645,6 +650,18 @@
                 link.href = canvas.toDataURL('image/png', 1.0); 
                 link.click();
             };
+
+            const handleExportInstitutionChart = () => {
+                const canvas = document.getElementById('institution-chart');
+                if (!institutionChartInstance || institutionChartInstance.data.labels.length === 0) {
+                    alert('没有可导出的机构持仓图表！');
+                    return;
+                }
+                const link = document.createElement('a');
+                link.download = `机构持仓分析图表-${new Date().toISOString().slice(0,10)}.png`;
+                link.href = canvas.toDataURL('image/png', 1.0);
+                link.click();
+            };
             
             const handleExportToCsv = () => {
                 const rows = document.querySelectorAll('#product-table-body tr');
@@ -762,6 +779,7 @@
             document.getElementById('calculate-btn').addEventListener('click', handleCalculate);
             document.getElementById('export-table-btn').addEventListener('click', handleExportTable);
             document.getElementById('export-chart-btn').addEventListener('click', handleExportChart);
+            document.getElementById('export-institution-chart-btn').addEventListener('click', handleExportInstitutionChart);
             document.getElementById('export-csv-btn').addEventListener('click', handleExportToCsv);
             document.getElementById('import-csv-input').addEventListener('change', handleImportFromCsv);
             document.getElementById('sort-by-name-header').addEventListener('click', sortTableByName);
