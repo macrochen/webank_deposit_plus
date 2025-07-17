@@ -120,12 +120,18 @@
                         <thead>
                             <tr class="border-b">
                                 <th class="text-center p-2 font-medium text-gray-600 w-[8%]">排名</th>
-                                <th class="text-left p-2 font-medium text-gray-600 w-[28%]">产品名称</th>
+                                <th id="sort-by-institution-header" class="text-left p-2 font-medium text-gray-600 w-[18%] cursor-pointer hover:bg-gray-100 transition rounded-t-lg">
+                                    <div class="flex items-center gap-1">
+                                        <span>机构名称</span>
+                                        <span id="sort-indicator-institution"></span>
+                                    </div>
+                                </th>
+                                <th class="text-left p-2 font-medium text-gray-600 w-[18%]">产品名称</th>
                                 <th class="text-right p-2 font-medium text-gray-600 w-[12%]">持有金额</th>
-                                <th class="text-right p-2 font-medium text-gray-600 w-[14%]">成立以来(%)</th>
-                                <th class="text-right p-2 font-medium text-gray-600 w-[14%]">近7日(%)</th>
-                                <th class="text-right p-2 font-medium text-gray-600 w-[14%]">综合分数</th>
-                                <th class="text-center p-2 font-medium text-gray-600 w-[10%]">售罄</th>
+                                <th class="text-right p-2 font-medium text-gray-600 w-[12%]">成立以来(%)</th>
+                                <th class="text-right p-2 font-medium text-gray-600 w-[12%]">近7日(%)</th>
+                                <th class="text-right p-2 font-medium text-gray-600 w-[12%]">综合分数</th>
+                                <th class="text-center p-2 font-medium text-gray-600 w-[8%]">售罄</th>
                             </tr>
                         </thead>
                         <tbody id="results-table-body"></tbody>
@@ -168,6 +174,7 @@
             let chartInstance = null;
             let institutionChartInstance = null;
             let nameSortDirection = 'asc';
+            let institutionSortDirection = 'asc';
             let lastCalculatedResults = [];
             const holidays2025 = ['2025-01-01', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-01', '2025-02-02', '2025-02-03', '2025-04-04', '2025-05-01', '2025-05-02', '2025-05-03', '2025-05-31', '2025-10-01', '2025-10-02', '2025-10-03', '2025-10-04', '2025-10-05', '2025-10-06', '2025-10-07'].map(d => new Date(d));
             const LOCAL_STORAGE_KEY = 'yieldAnalyzerData';
@@ -347,7 +354,8 @@
                     const comprehensiveScore = (sevenDayYield * 0.7) + (p.sinceInceptionYield * 0.3);
                     const holdingAmountPercentage = totalHoldingAmount > 0 ? (p.holdingAmount / totalHoldingAmount) * 100 : 0;
                     const isExcluded = p.isSoldOut && p.holdingAmount === 0;
-                    return { ...p, yield: sevenDayYield, comprehensiveScore, holdingAmountPercentage, isExcluded };
+                    const institutionName = p.name.split(' ')[0];
+                    return { ...p, institutionName, yield: sevenDayYield, comprehensiveScore, holdingAmountPercentage, isExcluded };
                 });
                 
                 const rankedProducts = resultsWithMetrics.filter(p => !p.isExcluded);
@@ -399,6 +407,30 @@
                 lastCalculatedResults = [...processedRankedProducts.sort((a,b) => b.comprehensiveScore - a.comprehensiveScore), ...excludedProducts.sort((a,b) => b.comprehensiveScore - a.comprehensiveScore)];
 
                 displayResults(lastCalculatedResults);
+            };
+
+            const sortResults = (results, key, direction) => {
+                results.sort((a, b) => {
+                    if (a.isExcluded && !b.isExcluded) return 1;
+                    if (!a.isExcluded && b.isExcluded) return -1;
+                    if (a.isExcluded && b.isExcluded) return 0;
+
+                    let comparison = 0;
+                    if (key === 'institutionName') {
+                        const aValue = a.institutionName;
+                        const bValue = b.institutionName;
+                        comparison = aValue.localeCompare(bValue, 'zh-CN');
+                        if (comparison === 0) {
+                            return b.comprehensiveScore - a.comprehensiveScore;
+                        }
+                    } else {
+                        const aValue = a[key];
+                        const bValue = b[key];
+                        if (aValue < bValue) comparison = -1;
+                        if (aValue > bValue) comparison = 1;
+                    }
+                    return direction === 'asc' ? comparison : -comparison;
+                });
             };
 
             const displayResults = (results) => {
@@ -462,6 +494,7 @@
                             ${rankDisplay}
                             ${actionIcon}
                         </td>
+                        <td class="p-3 font-medium">${p.institutionName}</td>
                         <td class="p-3 font-medium">${p.name}</td>
                         <td class="p-3 text-right">${holdingAmountFormatted}</td>
                         <td class="p-3 text-right text-gray-500">${sinceInceptionYieldFormatted}</td>
@@ -770,6 +803,20 @@
                 }
             };
 
+            const sortTableByInstitution = () => {
+                sortResults(lastCalculatedResults, 'institutionName', institutionSortDirection);
+                displayResults(lastCalculatedResults);
+
+                const sortIndicator = document.getElementById('sort-indicator-institution');
+                sortIndicator.innerHTML = institutionSortDirection === 'asc' 
+                    ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>' 
+                    : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+                
+                document.getElementById('sort-indicator').innerHTML = '';
+
+                institutionSortDirection = institutionSortDirection === 'asc' ? 'desc' : 'asc';
+            };
+
             // --- 页面初始化 ---
             document.getElementById('product-table-body').addEventListener('click', handleTableActions);
             document.getElementById('add-row-btn').addEventListener('click', () => {
@@ -783,6 +830,7 @@
             document.getElementById('export-csv-btn').addEventListener('click', handleExportToCsv);
             document.getElementById('import-csv-input').addEventListener('change', handleImportFromCsv);
             document.getElementById('sort-by-name-header').addEventListener('click', sortTableByName);
+            document.getElementById('sort-by-institution-header').addEventListener('click', sortTableByInstitution);
             document.getElementById('toggle-amount-visibility').addEventListener('change', handleAmountVisibilityToggle);
 
             const isAmountHiddenSaved = localStorage.getItem(AMOUNT_VISIBILITY_KEY) === 'true';
