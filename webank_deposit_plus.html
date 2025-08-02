@@ -244,10 +244,10 @@
                         </div>
                     </td>
                     <td class="p-1"><input type="text" class="input-cell product-name" placeholder="例如：悦慧7D" value="${name}"></td>
-                    <td class="p-1"><input type="number" class="input-cell holding-amount" placeholder="例如：10000" value="${holdingAmount}"></td>
-                    <td class="p-1"><input type="number" step="0.01" class="input-cell since-inception-yield" placeholder="例如：3.53" value="${sinceInceptionYield}"></td>
-                    <td class="p-1"><input type="number" step="0.0001" class="input-cell start-value" placeholder="例如：1.0812" value="${startVal}"></td>
-                    <td class="p-1"><input type="number" step="0.0001" class="input-cell end-value" placeholder="例如：1.0825" value="${endVal}"></td>
+                    <td class="p-1"><input type="text" class="input-cell holding-amount" placeholder="例如：10000" value="${holdingAmount}"></td>
+                    <td class="p-1"><input type="text" class="input-cell since-inception-yield" placeholder="例如：3.53" value="${sinceInceptionYield}"></td>
+                    <td class="p-1"><input type="text" class="input-cell start-value" placeholder="例如：1.0812" value="${startVal}"></td>
+                    <td class="p-1"><input type="text" class="input-cell end-value" placeholder="例如：1.0825" value="${endVal}"></td>
                     <td class="p-1 text-center"><input type="checkbox" class="form-checkbox h-5 w-5 text-red-600 rounded sold-out-checkbox" ${isSoldOut ? 'checked' : ''}></td>
                 `;
                 document.getElementById('product-table-body').appendChild(tr);
@@ -312,37 +312,80 @@
             };
 
             const handleCalculate = () => {
+                // 1. Reset previous validation states
+                document.querySelectorAll('#product-table-body .input-cell').forEach(input => {
+                    input.classList.remove('border-red-500', 'focus:ring-red-500');
+                    input.classList.add('border-gray-300', 'focus:ring-indigo-500');
+                });
+
                 const rows = document.querySelectorAll('#product-table-body tr');
                 let productsForCalc = [];
                 const productNames = new Set();
+                let isDataValid = true;
 
                 for (const row of rows) {
                     const nameInput = row.querySelector('.product-name');
                     const name = nameInput.value.trim();
-                    if (name) {
-                        if (productNames.has(name)) {
-                            alert(`错误：产品 "${name}" 重复输入，请删除多余的行或修改名称。`);
-                            nameInput.focus();
-                            return;
-                        }
-                        productNames.add(name);
-                        const holdingAmount = parseFloat(row.querySelector('.holding-amount').value) || 0;
-                        const sinceInceptionYield = parseFloat(row.querySelector('.since-inception-yield').value) || 0;
-                        const startValue = parseFloat(row.querySelector('.start-value').value);
-                        const endValue = parseFloat(row.querySelector('.end-value').value);
-                        const isSoldOut = row.querySelector('.sold-out-checkbox').checked;
+                    if (!name) continue;
 
-                        if (!isNaN(startValue) && !isNaN(endValue) && startValue > 0) {
-                            productsForCalc.push({ name, holdingAmount, sinceInceptionYield, startValue, endValue, isSoldOut });
-                        } else {
-                             productsForCalc.push({ name, holdingAmount, sinceInceptionYield, startValue: 0, endValue: 0, isSoldOut });
+                    if (productNames.has(name)) {
+                        alert(`错误：产品 "${name}" 重复输入，请删除多余的行或修改名称。`);
+                        nameInput.focus();
+                        isDataValid = false;
+                        break;
+                    }
+                    productNames.add(name);
+
+                    const validateAndGetValue = (selector, isRequired) => {
+                        const input = row.querySelector(selector);
+                        const valueStr = input.value.trim();
+                        
+                        if (valueStr === '' && !isRequired) return { isValid: true, value: 0 };
+                        
+                        const parsedValue = parseFloat(valueStr);
+                        
+                        if ((valueStr === '' && isRequired) || isNaN(parsedValue) || parsedValue < 0) {
+                            input.classList.add('border-red-500', 'focus:ring-red-500');
+                            input.classList.remove('border-gray-300', 'focus:ring-indigo-500');
+                            isDataValid = false;
+                            return { isValid: false, value: null };
+                        }
+                        return { isValid: true, value: parsedValue };
+                    };
+
+                    const holdingAmountResult = validateAndGetValue('.holding-amount', false);
+                    const sinceInceptionYieldResult = validateAndGetValue('.since-inception-yield', false);
+                    const startValueResult = validateAndGetValue('.start-value', false);
+                    const endValueResult = validateAndGetValue('.end-value', false);
+
+                    if (isDataValid) {
+                        const isSoldOut = row.querySelector('.sold-out-checkbox').checked;
+                        // Only push if the results for this row were valid so far
+                        if (holdingAmountResult.isValid && sinceInceptionYieldResult.isValid && startValueResult.isValid && endValueResult.isValid) {
+                            productsForCalc.push({
+                                name,
+                                holdingAmount: holdingAmountResult.value,
+                                sinceInceptionYield: sinceInceptionYieldResult.value,
+                                startValue: startValueResult.value,
+                                endValue: endValueResult.value,
+                                isSoldOut
+                            });
                         }
                     }
+                }
+
+                if (!isDataValid) {
+                    alert('部分输入数据格式不正确（例如包含文本或负数），请检查红色高亮的输入框。');
+                    return;
                 }
                 
                 saveDataToLocalStorage(); 
 
-                if (productsForCalc.length === 0) { 
+                if (productsForCalc.length === 0 && Array.from(document.querySelectorAll('#product-table-body tr')).some(r => r.querySelector('.product-name').value.trim() !== '')) {
+                    return;
+                }
+                
+                if (productsForCalc.length === 0) {
                     alert('请输入有效的产品数据后再进行计算！'); 
                     return; 
                 }
@@ -407,6 +450,23 @@
                 lastCalculatedResults = [...processedRankedProducts.sort((a,b) => b.comprehensiveScore - a.comprehensiveScore), ...excludedProducts.sort((a,b) => b.comprehensiveScore - a.comprehensiveScore)];
 
                 displayResults(lastCalculatedResults);
+            };
+
+            const validateNumericInput = (input) => {
+                const valueStr = input.value.trim();
+                if (valueStr === '') {
+                    input.classList.remove('border-red-500', 'focus:ring-red-500');
+                    input.classList.add('border-gray-300', 'focus:ring-indigo-500');
+                    return;
+                }
+                const isValid = !isNaN(parseFloat(valueStr)) && parseFloat(valueStr) >= 0;
+                if (isValid) {
+                    input.classList.remove('border-red-500', 'focus:ring-red-500');
+                    input.classList.add('border-gray-300', 'focus:ring-indigo-500');
+                } else {
+                    input.classList.add('border-red-500', 'focus:ring-red-500');
+                    input.classList.remove('border-gray-300', 'focus:ring-indigo-500');
+                }
             };
 
             const sortResults = (results, key, direction) => {
@@ -604,23 +664,16 @@
                 const content = document.getElementById('export-content');
                 const title = document.getElementById('export-title');
                 const dateEl = document.getElementById('export-date');
-                
-                const results = Array.from(document.querySelectorAll('#results-table-body tr')).map(row => ({
-                    rank: row.children[0].textContent.trim(),
-                    name: row.children[1].textContent,
-                    holdingAmount: row.children[2].innerHTML,
-                    sinceInceptionYield: row.children[3].innerHTML,
-                    yield: row.children[4].innerHTML,
-                    comprehensiveScore: row.children[5].textContent,
-                    isSoldOut: row.children[6].textContent,
-                    rebalanceAction: row.children[0].querySelector('div')?.textContent || ''
-                }));
+                const isAmountHidden = document.getElementById('toggle-amount-visibility').checked;
 
-                if(results.length === 0) { alert('没有可导出的结果！'); return; }
-                
+                if (lastCalculatedResults.length === 0) {
+                    alert('没有可导出的结果！');
+                    return;
+                }
+
                 title.textContent = '活期+plus 调仓决策表';
                 dateEl.textContent = `数据截止: ${document.getElementById('end-date-display').textContent}`;
-                content.innerHTML = ''; 
+                content.innerHTML = '';
 
                 const table = document.createElement('table');
                 table.style.width = '100%';
@@ -629,35 +682,79 @@
                     <thead style="text-align: left; border-bottom: 1px solid #e5e7eb;">
                         <tr>
                             <th style="padding: 8px; width: 8%;">排名</th>
-                            <th style="padding: 8px; width: 28%;">产品名称</th>
+                            <th style="padding: 8px; width: 18%;">机构名称</th>
+                            <th style="padding: 8px; width: 18%;">产品名称</th>
                             <th style="padding: 8px; width: 14%; text-align: right;">持有金额</th>
                             <th style="padding: 8px; width: 14%; text-align: right;">成立以来(%)</th>
                             <th style="padding: 8px; width: 14%; text-align: right;">近7日(%)</th>
                             <th style="padding: 8px; width: 12%; text-align: right;">综合分数</th>
-                            <th style="padding: 8px; width: 10%; text-align: center;">售罄</th>
+                            <th style="padding: 8px; width: 8%; text-align: center;">售罄</th>
                         </tr>
                     </thead>
                 `;
                 const tbody = document.createElement('tbody');
-                results.forEach(p => {
-                    const rankColor = p.rank.startsWith('1') ? '#ef4444' : (p.rank.startsWith('2') ? '#f97316' : (p.rank.startsWith('3') ? '#eab308' : '#374151'));
-                    const soldOutColor = p.isSoldOut === '是' ? '#ef4444' : '#16a34a';
-                    const item = document.createElement('tr');
+                let rankCounter = 0;
+                lastCalculatedResults.forEach(p => {
+                    let rankDisplay;
+                    let rankStyle = '';
+                    let rowBgClass = '';
 
-                    if (p.rebalanceAction === '减仓') {
-                        item.style.backgroundColor = '#fef9c3'; // Light yellow
-                    } else if (p.rebalanceAction === '加仓') {
-                        item.style.backgroundColor = '#dcfce7'; // Light green
+                    if (p.isExcluded) {
+                        rankDisplay = '-';
+                    } else {
+                        rankCounter++;
+                        rankDisplay = rankCounter;
+                        rankStyle = rankCounter === 1 ? '#ef4444' : (rankCounter === 2 ? '#f97316' : (rankCounter === 3 ? '#eab308' : '#374151'));
                     }
 
+                    if (p.rebalanceAction === '减仓') {
+                        rowBgClass = '#fef9c3'; // Light yellow
+                    } else if (p.rebalanceAction === '加仓') {
+                        rowBgClass = '#dcfce7'; // Light green
+                    }
+
+                    const soldOutText = p.isSoldOut ? '是' : '否';
+                    const soldOutColor = p.isSoldOut ? '#ef4444' : '#16a34a';
+
+                    let holdingAmountFormatted = '***';
+                    if (!isAmountHidden) {
+                        holdingAmountFormatted = p.holdingAmount > 0
+                            ? `${p.holdingAmount.toLocaleString('en-US')} <span style="font-size: 12px; color: #9ca3af;">(${p.holdingAmountPercentage.toFixed(2)}%)</span>`
+                            : '-';
+                    }
+
+                    let sinceInceptionYieldFormatted = '-';
+                    if (p.sinceInceptionYield > 0 || p.sinceInceptionYield === 0) {
+                        sinceInceptionYieldFormatted = `${p.sinceInceptionYield.toFixed(2)}%`;
+                        if (p.inceptionRank) {
+                            sinceInceptionYieldFormatted += ` <span style="font-size: 12px; color: #9ca3af;">(${p.inceptionRank})</span>`;
+                        }
+                    }
+
+                    let sevenDayYieldFormatted = '-';
+                    if (p.startValue > 0 || p.yield === 0) {
+                        sevenDayYieldFormatted = `${p.yield.toFixed(2)}%`;
+                        if (p.sevenDayRank) {
+                            sevenDayYieldFormatted += ` <span style="font-size: 12px; color: #9ca3af;">(${p.sevenDayRank})</span>`;
+                        }
+                    }
+
+                    const item = document.createElement('tr');
+                    if (p.isExcluded) {
+                        item.style.textDecoration = 'line-through';
+                        item.style.color = '#9ca3af';
+                    }
+                    if(rowBgClass) item.style.backgroundColor = rowBgClass;
+
                     item.innerHTML = `
-                        <td style="padding: 8px; text-align: center; font-weight: bold; color: ${rankColor};">${p.rank}</td>
+                        <td style="padding: 8px; text-align: center; font-weight: bold; color: ${rankStyle};">${rankDisplay}</td>
+                        <td style="padding: 8px;">${p.institutionName}</td>
                         <td style="padding: 8px;">${p.name}</td>
-                        <td style="padding: 8px; text-align: right;">${p.holdingAmount}</td>
-                        <td style="padding: 8px; text-align: right; color: #6b7280;">${p.sinceInceptionYield}</td>
-                        <td style="padding: 8px; font-weight: bold; color: #16a34a; text-align: right;">${p.yield}</td>
-                        <td style="padding: 8px; font-weight: bold; color: #3b82f6; text-align: right;">${p.comprehensiveScore}</td>
-                        <td style="padding: 8px; text-align: center; font-weight: bold; color: ${soldOutColor};">${p.isSoldOut}</td>
+                        <td style="padding: 8px; text-align: right;">${holdingAmountFormatted}</td>
+                        <td style="padding: 8px; text-align: right; color: #6b7280;">${sinceInceptionYieldFormatted}</td>
+                        <td style="padding: 8px; font-weight: bold; color: #16a34a; text-align: right;">${sevenDayYieldFormatted}</td>
+                        <td style="padding: 8px; font-weight: bold; color: #3b82f6; text-align: right;">${p.comprehensiveScore.toFixed(2)}</td>
+                        <td style="padding: 8px; text-align: center; font-weight: bold; color: ${soldOutColor};">${soldOutText}</td>
                     `;
                     tbody.appendChild(item);
                 });
@@ -666,7 +763,7 @@
 
                 html2canvas(container).then(canvas => {
                     const link = document.createElement('a');
-                    link.download = `活期plus调仓决策表-${new Date().toISOString().slice(0,10)}.png`;
+                    link.download = `活期plus调仓决策表-${new Date().toISOString().slice(0, 10)}.png`;
                     link.href = canvas.toDataURL('image/png');
                     link.click();
                 });
@@ -819,6 +916,15 @@
 
             // --- 页面初始化 ---
             document.getElementById('product-table-body').addEventListener('click', handleTableActions);
+            document.getElementById('product-table-body').addEventListener('input', (e) => {
+                if (e.target.classList.contains('input-cell') && e.target.type === 'text') {
+                    // Exclude product-name from this validation
+                    if (!e.target.classList.contains('product-name')) {
+                        validateNumericInput(e.target);
+                    }
+                }
+            });
+
             document.getElementById('add-row-btn').addEventListener('click', () => {
                 createTableRow();
                 updateRowButtonsState();
